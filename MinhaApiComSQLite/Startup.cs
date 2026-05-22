@@ -1,19 +1,9 @@
-﻿#region assembly Microsoft.AspNetCore.Mvc.NewtonsoftJson, Version=5.0.14.0, Culture=neutral, PublicKeyToken=adb9793829ddae60
-// C:\Users\isaias.gomes\.nuget\packages\microsoft.aspnetcore.mvc.newtonsoftjson\5.0.14\lib\net5.0\Microsoft.AspNetCore.Mvc.NewtonsoftJson.dll
-// Decompiled with ICSharpCode.Decompiler 8.1.1.7464
-#endregion
-
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.OpenApi.Models;
-using System.Text;
-using System;
 using Microsoft.AspNetCore.Mvc;
-using MinhaApiComSQLite.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using MinhaApiComSQLite.Data;
+using MinhaApiComSQLite.Repositories;
+using MinhaApiComSQLite.Services;
 
 namespace MinhaApiComSQLite
 {
@@ -26,14 +16,30 @@ namespace MinhaApiComSQLite
 
         public IConfiguration Configuration { get; }
 
-        // Método chamado pela ASP.NET Core para adicionar serviços ao container.
         public void ConfigureServices(IServiceCollection services)
         {
-            // Configurar banco de dados SQLite
             services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlite(Configuration.GetConnectionString("DefaultConnection")));
 
-            // Configurar o Swagger
+            services.AddScoped<IProdutoRepository, ProdutoRepository>();
+            services.AddScoped<ICategoriaRepository, CategoriaRepository>();
+            services.AddScoped<IProdutoService, ProdutoService>();
+            services.AddScoped<ICategoriaService, CategoriaService>();
+
+            services.AddControllers()
+                .ConfigureApiBehaviorOptions(options =>
+                {
+                    options.InvalidModelStateResponseFactory = context =>
+                    {
+                        var error = context.ModelState.Values
+                            .SelectMany(v => v.Errors)
+                            .Select(e => e.ErrorMessage)
+                            .FirstOrDefault() ?? "Dados invalidos.";
+
+                        return new BadRequestObjectResult(new { error });
+                    };
+                });
+
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen(options =>
             {
@@ -41,41 +47,29 @@ namespace MinhaApiComSQLite
                 {
                     Title = "Minha API com SQLite",
                     Version = "v1",
-                    Description = "API para gerenciar produtos com SQLite",
-                    Contact = new OpenApiContact
-                    {
-                        Name = "Seu Nome",
-                        Email = "seu.email@exemplo.com",
-                        Url = new Uri("https://seuwebsite.com")
-                    }
+                    Description = "API RESTful para gerenciar produtos e categorias com ASP.NET Core, EF Core e SQLite."
                 });
             });
-
-            // Configurar controladores e endpoints
-            services.AddControllers();
         }
 
-        // Método chamado pela ASP.NET Core para configurar o pipeline HTTP.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
             {
-                // Configurar Swagger apenas em desenvolvimento
                 app.UseSwagger();
                 app.UseSwaggerUI(options =>
                 {
                     options.SwaggerEndpoint("/swagger/v1/swagger.json", "Minha API com SQLite v1");
-                    options.RoutePrefix = ""; // Swagger abre na URL raiz
+                    options.RoutePrefix = string.Empty;
                 });
             }
 
-            app.UseHttpsRedirection(); // Força HTTPS
-            app.UseRouting();          // Habilita o roteamento
-            app.UseAuthorization();    // Habilita a autorização
+            app.UseRouting();
+            app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllers(); // Mapeia controladores
+                endpoints.MapControllers();
             });
         }
     }
